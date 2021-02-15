@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31005.135
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bepinex-Publicizer", "Bepinex-Publicizer\Bepinex-Publicizer.csproj", "{AF6224AE-B14E-4FFF-9400-77EE91F9F9D9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AF6224AE-B14E-4FFF-9400-77EE91F9F9D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF6224AE-B14E-4FFF-9400-77EE91F9F9D9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {627A6ECF-AFCD-4092-BEE4-B620062207B8}
+	EndGlobalSection
+EndGlobal
