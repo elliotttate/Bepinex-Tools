@@ -52,10 +52,21 @@
     <Reference Include="System.Threading.Tasks.Extensions, Version=4.2.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\Dependencies\UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\Dependencies\UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Player Events\Models\EventInfo.cs" />
     <Compile Include="Player Events\EventLookup.cs" />
+    <Compile Include="Player Events\TimerCooldown.cs" />
     <Compile Include="TwitchClients\Models\ChannelPointRedemptionMessageData.cs" />
     <Compile Include="TwitchClients\Models\ChannelPointRedemptionMessage.cs" />
     <Compile Include="TwitchClients\Models\ListenRequestData.cs" />

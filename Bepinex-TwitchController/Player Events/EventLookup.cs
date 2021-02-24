@@ -79,6 +79,7 @@ namespace TwitchController.Player_Events
             if (EventDictionary.Keys.Contains(EventText))
             {
                 ActionQueue.Add(new KeyValuePair<string, EventInfo>(EventText, EventDictionary[EventText]));
+                controller.timer.AddQueueEvent(EventText);
             }
         }
 
@@ -90,6 +91,7 @@ namespace TwitchController.Player_Events
             {
                 controller._log.LogMessage(Event.Key);
                 ActionQueue.Add(Event);
+                controller.timer.AddQueueEvent(Event.Key);
             }
 
         }

@@ -2,6 +2,7 @@
 using TwitchController.Player_Events;
 using BepInEx.Logging;
 using System.Threading.Tasks;
+using UnityEngine.PlayerLoop;
 
 namespace TwitchController
 {
@@ -16,6 +17,7 @@ namespace TwitchController
         internal readonly Assembly myAssembly = Assembly.GetExecutingAssembly();
         internal readonly EventLookup eventLookup;
         internal readonly TwitchEventManager eventManager;
+        internal readonly TimerCooldown timer;
 
         public TwitchChatClient client;
         public TwitchPubSubClient pubsub;
@@ -31,9 +33,15 @@ namespace TwitchController
             _log = log;
             eventLookup = new EventLookup(this);
             eventManager = new TwitchEventManager(this);
+            timer = new TimerCooldown(this);
 
             // Customize event configuration
             eventLookup.ConfigureEventCosts(secrets.eventConfigList);
+        }
+
+        public void Update()
+        {
+            timer.Update();
         }
 
         public async Task<bool> StartTwitchChatClient()
@@ -73,7 +81,4 @@ namespace TwitchController
             return false;
         }
     }
-
-
-
 }
