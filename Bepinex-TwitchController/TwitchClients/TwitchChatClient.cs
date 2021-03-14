@@ -12,13 +12,15 @@ namespace TwitchController
 
         public event EventHandler ConnectionClose;
 
+        public event EventHandler<string> MessageRecieved;
+
         private IMessageClient _twitchMessageClient;
 
-        protected ICollection<Channel> _channels = new List<Channel>();
+        protected Channel _channel;
 
-        private readonly TwitchController controller;
+        private readonly Controller controller;
 
-        public TwitchChatClient(TwitchController twitchController)
+        public TwitchChatClient(Controller twitchController)
         {
             controller = twitchController;
         }
@@ -35,20 +37,17 @@ namespace TwitchController
 
         public bool IsClientConnected()
         {
-            return _twitchMessageClient.IsConnected();
+            return _twitchMessageClient?.IsConnected() ?? false;
         }
 
         public bool IsChannelConnected(string channelName, out Channel outchannel)
         {
             outchannel = null;
-            foreach (Channel channel in _channels)
-            {
-                if (channel.Name == channelName)
+                if (_channel?.Name == channelName)
                 {
-                    outchannel = channel;
+                    outchannel = _channel;
                     return true;
                 }
-            }
             return false;
         }
 
@@ -57,23 +56,40 @@ namespace TwitchController
         /// </summary>
         /// <param name="sender">IMessageClient</param>
         /// <param name="e">Raw message</param>
-        private void OnRawMessageReceived(object sender, string e)
+        private async void OnRawMessageReceived(object sender, string e)
         {
             // About once every five minutes, the server sends a PING.
             // To ensure that your connection to the server is not prematurely terminated, reply with PONG
             if (e.StartsWith("PING"))
             {
+                controller._log.LogMessage($"Twitch Client Ping");
                 Task pong = SendPongResponseAsync();
-                pong.RunSynchronously();
-                if(pong.Status != TaskStatus.RanToCompletion)
+                await pong;
+
+                if (pong.Status != TaskStatus.RanToCompletion)
+                {
                     controller._log.LogError($"Sending Pong Failed! {pong.Status}");
+                }
+                if (pong.Status == TaskStatus.RanToCompletion)
+                {
+                    controller._log.LogMessage($"Twitch Client replied with Pong.");
+                }
+
+                return;
             }
 
-            if (TryParsePrivateMessage(e, out var message))
+            try
             {
-                var c = _channels.FirstOrDefault(d => d.Name == message.Channel);
-                c?.ReceiveMessage(message);
+                MessageRecieved?.Invoke(sender, e);
             }
+            catch { };
+
+
+            if (TryParsePrivateMessage(e, out Message message))
+            {
+                _channel?.ReceiveMessage(message);
+            }
+
         }
 
         /// <summary>
@@ -93,6 +109,15 @@ namespace TwitchController
         }
 
         /// <summary>
+        /// Attempts to Reconnect asynchronously.
+        /// </summary>
+        /// <returns></returns>
+        public Task ReConnectAsync()
+        {
+            return _twitchMessageClient.ConnectAsync("oauth:" + controller._secrets.api_token, controller._secrets.username, controller.cts);
+        }
+
+        /// <summary>
         /// Joins to given twitch channel. Connection must be established first.
         /// </summary>
         /// <param name="channelName">A channel name</param>
@@ -100,16 +125,11 @@ namespace TwitchController
         /// <returns></returns>
         public async Task<Channel> JoinChannelAsync(string channelName, CancellationToken cancellationToken)
         {
-            var cn = channelName.ToLower();
-            await _twitchMessageClient.SendMessageAsync($"JOIN #{cn}", cancellationToken);
+            await _twitchMessageClient.SendMessageAsync($"JOIN #{channelName.ToLower()}", cancellationToken);
 
-            if (!IsChannelConnected(channelName, out Channel channel))
-            {
-                channel = new Channel(cn, _twitchMessageClient);
-                _channels.Add(channel);
-            }
-            
-            return channel;
+            _channel = new Channel(channelName.ToLower(), _twitchMessageClient);
+
+            return _channel;
         }
 
         /// <summary>
@@ -119,7 +139,7 @@ namespace TwitchController
         /// <returns></returns>
         private Task SendPongResponseAsync()
         {
-            return _twitchMessageClient.SendMessageAsync("PONG :tmi.twitch.tv\r\n", CancellationToken.None);
+            return _twitchMessageClient.SendMessageAsync("PONG :tmi.twitch.tv", CancellationToken.None);
         }
 
 
@@ -132,19 +152,20 @@ namespace TwitchController
         public bool TryParsePrivateMessage(string message, out Message msg)
         {
             msg = new Message();
-            var regex = new Regex(":(?<user>.*)!(.*)@(?<host>.*) PRIVMSG #(?<channel>.*) :(?<text>.*)");
-            var match = regex.Match(message);
+            Regex regex = new Regex(":(?<user>.*)!(.*)@(?<host>.*) PRIVMSG #(?<channel>.*) :(?<text>.*)");
+            Match match = regex.Match(message);
 
             if (!match.Success)
+            {
                 return false;
+            }
 
-            var groups = match.Groups;
+            GroupCollection groups = match.Groups;
 
             msg.RawMessage = message;
             msg.User = groups["user"].Value;
             msg.Host = groups["host"].Value;
-            msg.Channel = groups["channel"].Value;
-            msg.Text = groups["text"].Value;
+            msg.TriggerText = groups["text"].Value;
 
             return true;
         }

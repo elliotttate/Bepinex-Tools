@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net.Http;
-using System.Text.Json;
 
 namespace TwitchController
 {
@@ -41,19 +39,6 @@ namespace TwitchController
         public Task LeaveChannelAsync(CancellationToken cancellationToken)
         {
             return _messageClient.SendMessageAsync($"PART #{Name.ToLower()}", cancellationToken);
-        }
-
-        /// <summary>
-        /// Retrieves current channel chat information.
-        /// </summary>
-        /// <returns></returns>
-        public async Task<ChatInfo> GetChatInformationAsync()
-        {
-            var httpClient = new HttpClient();
-            var jsonResponse = await httpClient.GetStreamAsync($"https://tmi.twitch.tv/group/user/{Name}/chatters");
-            var chatInfo = await JsonSerializer.DeserializeAsync<ChatInfo>(jsonResponse);
-
-            return chatInfo;
         }
 
         internal void ReceiveMessage(Message message)

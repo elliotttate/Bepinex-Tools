@@ -1,7 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using BepInEx;
+using LitJson;
+using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
-using System.Text.Json;
+using System.Text;
 using UnityEngine;
 
 namespace TwitchController
@@ -10,16 +11,16 @@ namespace TwitchController
     {
 
         private static string _configFilePath = null;
-        private static string ConfigFilePath { get => _configFilePath ?? (_configFilePath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "TwitchConfig.txt")); }
+        private static string ConfigFilePath => _configFilePath ?? (_configFilePath = Path.Combine(Paths.PluginPath, "HTH/TwitchConfig.json"));
 
 
-        public string client_id;
-        public string access_token;
-        public string api_token;
-        public string nick_id;
-        public string username;
-        public string botname;
-        public List<ConfigEventInfo> eventConfigList = new List<ConfigEventInfo>();
+        protected internal string client_id;
+        protected internal string api_token;
+        protected internal string refresh_token;
+        protected internal string nick_id;
+        protected internal string username;
+        protected internal string botname;
+        protected internal string regex;
 
         public Secrets(string customConfigPath = null)
         {
@@ -27,21 +28,32 @@ namespace TwitchController
 
             if (!File.Exists(ConfigFilePath))
             {
-                File.WriteAllText(ConfigFilePath, JsonSerializer.Serialize(new Config(), new JsonSerializerOptions() { AllowTrailingCommas = true, WriteIndented = true }));
+                StringBuilder stringBuilder = new StringBuilder();
+                JsonMapper.ToJson(new Config(), new JsonWriter(stringBuilder) { PrettyPrint = true });
+
+                File.WriteAllText(ConfigFilePath, stringBuilder.ToString());
                 Application.Quit();
             }
 
-            Config config = JsonSerializer.Deserialize<Config>(File.ReadAllText(ConfigFilePath));
+            Config config = JsonMapper.ToObject<Config>(File.ReadAllText(ConfigFilePath));
             client_id = config.ClientId;
-            access_token = config.BotAccessToken;
             api_token = config.UsernameToken;
+            refresh_token = config.UsernameRefreshToken;
             nick_id = config.UsernameId;
             username = config.Username;
             botname = config.BotName;
-            if (config.EventInfoList != null)
+            regex = config.TipsRegEx;
+
+
+            try
             {
-                eventConfigList = config.EventInfoList;
+
             }
+            catch { }
+            StringBuilder stringBuilder2 = new StringBuilder();
+            JsonMapper.ToJson(config, new JsonWriter(stringBuilder2) { PrettyPrint = true });
+            File.WriteAllText(ConfigFilePath, stringBuilder2.ToString());
+
         }
     }
 }

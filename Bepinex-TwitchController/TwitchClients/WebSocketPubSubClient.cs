@@ -1,32 +1,32 @@
-﻿using System;
+﻿using LitJson;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text.Json;
 
 namespace TwitchController
 {
-    class WebSocketPubSubClient : IMessageClient
+    internal class WebSocketPubSubClient : IMessageClient
     {
         public event EventHandler<string> MessageReceived;
 
         public event EventHandler ConnectionClosed;
 
-        private ClientWebSocket _webSocketClient = new ClientWebSocket();
+        private readonly ClientWebSocket _webSocketClient = new ClientWebSocket();
 
         private readonly Uri _webSocketServerUri;
 
-        public WebSocketPubSubClient(string webSocketServerUrl = "irc.fdgt.dev")//"wss://pubsub-edge.twitch.tv:443")
+        public WebSocketPubSubClient(string webSocketServerUrl = /*"wss://irc.fdgt.dev:443")//*/"wss://pubsub-edge.twitch.tv:443")
         {
             _webSocketServerUri = new Uri(webSocketServerUrl);
         }
 
         public async Task SendMessageAsync(string message, CancellationToken cancellationToken)
         {
-            var messageBytes = Encoding.UTF8.GetBytes(message);
+            byte[] messageBytes = Encoding.UTF8.GetBytes(message);
             await _webSocketClient.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, cancellationToken);
         }
 
@@ -34,7 +34,7 @@ namespace TwitchController
         {
             for (int i = 0, r = input.Length; r >= n; r -= n, i += n)
             {
-                var result = new T[n];
+                T[] result = new T[n];
                 Array.Copy(input, i, result, 0, n);
                 yield return result;
             }
@@ -47,23 +47,28 @@ namespace TwitchController
             if (_webSocketClient.State == WebSocketState.Open)
             {
                 ListenRequest lr = new ListenRequest();
-                ListenRequestData lrd = new ListenRequestData();
-                lrd.AuthToken = token;
-                String[] lrdt = { "channel-points-channel-v1." + channelId, "channel-bits-events-v2." + channelId };
-                lrd.Topics = lrdt;
-                lr.Data = lrd;
-                lr.Nonce = "lkjsdhfiusdagf";
-                lr.Type = "LISTEN";
-                String jlr = JsonSerializer.Serialize<ListenRequest>(lr);
+                ListenRequestData lrd = new ListenRequestData
+                {
+                    auth_token = token,
+                    topics = new string[] { "channel-points-channel-v1." + channelId, "channel-bits-events-v2." + channelId, "channel-subscribe-events-v1." + channelId, "hype-train-events-v1." + channelId }
+                };
+                lr.data = lrd;
+                lr.nonce = "lkjsdhfiusdagf";
+                lr.type = "LISTEN";
+                StringBuilder stringBuilder = new StringBuilder();
+                JsonMapper.ToJson(lr, new JsonWriter(stringBuilder));
+                string jlr = stringBuilder.ToString();
+                //Controller._instance._log.LogMessage(jlr);
                 await SendMessageAsync(jlr, cancellationToken);
 
-                var timer = new Timer(async (e) =>
+                Timer timer = new Timer(async (e) =>
                 {
+                    Controller._instance._log.LogMessage("Sending PubSub Ping");
                     await SendMessageAsync("{\"type\":  \"PING\"}", cancellationToken);
                 }, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
 
                 // start receiving messages in separeted thread
-                var receive = ReceiveAsync(cancellationToken).ConfigureAwait(false);
+                System.Runtime.CompilerServices.ConfiguredTaskAwaitable receive = ReceiveAsync(cancellationToken).ConfigureAwait(false);
             }
 
 
@@ -86,7 +91,7 @@ namespace TwitchController
             {
                 try
                 {
-                    var message = await ReceiveMessageAsync(cancellationToken);
+                    string message = await ReceiveMessageAsync(cancellationToken);
                     MessageReceived?.Invoke(this, message);
                 }
                 catch (WebSocketException)
@@ -94,10 +99,11 @@ namespace TwitchController
                     if (_webSocketClient.State != WebSocketState.Open)
                     {
                         ConnectionClosed?.Invoke(this, null);
-                        return;
                     }
+                    _webSocketClient.Abort();
+                    return;
                 }
-            }
+            };
         }
 
         /// <summary>
@@ -108,18 +114,20 @@ namespace TwitchController
         private async Task<string> ReceiveMessageAsync(CancellationToken cancellationToken)
         {
             // RFC 1459 uses 512 bytes to hold one full message, therefore, it should be enough
-            var byteArray = new byte[4096];
-            var receiveBuffer = new ArraySegment<byte>(byteArray);
+            byte[] byteArray = new byte[4096];
+            ArraySegment<byte> receiveBuffer = new ArraySegment<byte>(byteArray);
             string receivedMessage = "";
-            while(true)
+            while (true)
             {
-                var receivedResult = await _webSocketClient.ReceiveAsync(receiveBuffer, cancellationToken);
-                var msgBytes = receiveBuffer.Skip(receiveBuffer.Offset)
+                WebSocketReceiveResult receivedResult = await _webSocketClient.ReceiveAsync(receiveBuffer, cancellationToken);
+                byte[] msgBytes = receiveBuffer.Skip(receiveBuffer.Offset)
                     .Take(receivedResult.Count)
                     .ToArray();
                 receivedMessage += Encoding.UTF8.GetString(msgBytes);
                 if (receivedResult.EndOfMessage)
+                {
                     break;
+                }
             }
 
             return receivedMessage;

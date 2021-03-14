@@ -2,15 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using TwitchController.Player_Events.Models;
-using System.Collections.Concurrent;
 
 namespace TwitchController.Player_Events
 {
     public class EventLookup
     {
-        private readonly TwitchController controller;
+        private readonly Controller controller;
 
-        public EventLookup(TwitchController twitchController)
+        public EventLookup(Controller twitchController)
         {
             controller = twitchController;
         }
@@ -28,9 +27,9 @@ namespace TwitchController.Player_Events
         public Dictionary<string, float> Cooldowns = new Dictionary<string, float>();
 
         //MAP OF EVENTS TO THEIR APPROPRIATE FUNCTIONS
-        // Parameter: ID, Action, BitCost, CooldownSeconds
+        // Parameter: ID, Action<string, string>, BitCost, CooldownSeconds
         private readonly Dictionary<string, EventInfo> EventDictionary = new Dictionary<string, EventInfo>();
-        
+
         public bool AddEvent(string EventID, EventInfo eventInfo)
         {
             if (!EventDictionary.Keys.Contains(EventID))
@@ -42,7 +41,18 @@ namespace TwitchController.Player_Events
             return false;
         }
 
-        public bool AddEvent(string EventID, Action Action, int BitCost, int CooldownSeconds)
+        public bool AddEvent(string EventID, DataEvent eventInfo)
+        {
+            if (!EventDictionary.Keys.Contains(EventID))
+            {
+                EventDictionary.Add(EventID, eventInfo);
+                return true;
+            }
+            controller._log.LogError($"Event with ID: {EventID} already registered!");
+            return false;
+        }
+
+        public bool AddEvent(string EventID, Action<string, string> Action, int BitCost, int CooldownSeconds)
         {
             if (!EventDictionary.Keys.Contains(EventID))
             {
@@ -52,64 +62,83 @@ namespace TwitchController.Player_Events
             controller._log.LogError($"Event with ID: {EventID} already registered!");
             return false;
         }
-        public bool AddTimedEvent(string EventID, Action Action, int BitCost, int CooldownSeconds, Action TimedAction, int TimerLength)
+
+        public bool AddTimedEvent(string EventID, Action<string, string> Action, int BitCost, int CooldownSeconds, Action TimedAction, int TimerLength)
         {
             if (!EventDictionary.Keys.Contains(EventID))
             {
-                EventDictionary.Add(EventID, new TimedEventInfo(Action, BitCost, CooldownSeconds, TimedAction,TimerLength));
+                EventDictionary.Add(EventID, new TimedEventInfo(Action, BitCost, CooldownSeconds, TimedAction, TimerLength));
                 return true;
             }
             controller._log.LogError($"Event with ID: {EventID} already registered!");
             return false;
         }
 
-        public string getBitCosts()
+        public bool TryGetEvent(string EventID, out EventInfo eventInfo)
+        {
+            return EventDictionary.TryGetValue(EventID, out eventInfo);
+        }
+
+        public string GetBitCosts()
         {
             string message = "";
             foreach (KeyValuePair<string, EventInfo> pair in EventDictionary)
             {
-                var costText = pair.Key + " costs " + pair.Value.BitCost + " bits ||| ";
-                message += costText;
+                if(pair.Value.BitCost > 0)
+                {
+                    string costText = $"[{pair.Key}]: {pair.Value.BitCost} bits ||| ";
+                    message += costText;
+                }
             }
             return message;
         }
 
-        public void Lookup(string EventText)
+        public void Lookup(string EventText, string perp, string userInput)
         {
-            if (EventDictionary.Keys.Contains(EventText))
+            if (EventDictionary.TryGetValue(EventText.Trim(), out EventInfo eventInfo))
             {
-                ActionQueue.Add(new KeyValuePair<string, EventInfo>(EventText, EventDictionary[EventText]));
-                controller.timer.AddQueueEvent(EventText);
-            }
-        }
-
-        public void Lookup(string EventText, int bits)
-        {
-            KeyValuePair<string, EventInfo> Event = EventDictionary.FirstOrDefault(it => EventText.Contains(it.Key));
-            controller._log.LogMessage(Event.Key);
-            if (!Event.Equals(default(KeyValuePair<string, EventInfo>)) && bits >= Event.Value.BitCost)
-            {
-                controller._log.LogMessage(Event.Key);
-                ActionQueue.Add(Event);
-                controller.timer.AddQueueEvent(Event.Key);
-            }
-
-        }
-
-        public void ConfigureEventCosts(List<ConfigEventInfo> configInfo)
-        {
-            foreach (ConfigEventInfo i in configInfo)
-            {
-                if (EventDictionary.TryGetValue(i.EventName, out EventInfo eventInfo))
+                switch (eventInfo)
                 {
-                    if(eventInfo.BitCost != i.BitCost || eventInfo.CooldownSeconds != i.Cooldown)
-                    {
-                        eventInfo.BitCost = i.BitCost;
-                        eventInfo.CooldownSeconds = i.Cooldown;
-                        controller._log.LogMessage("Updating " + i.EventName + " to cost " + i.BitCost + " with a cooldown of " + i.Cooldown);
-                    }
+                    case TimedEventInfo timed:
+                        TimedEventInfo tei = new TimedEventInfo(perp, timed);
+                        ActionQueue.Add(new KeyValuePair<string, EventInfo>(EventText, tei));
+                        break;
+
+                    default:
+                        EventInfo ei = new EventInfo(perp, eventInfo);
+                        ActionQueue.Add(new KeyValuePair<string, EventInfo>(EventText, ei));
+                        break;
                 }
             }
         }
+
+        public void Lookup(string perp, int bits, string userInput)
+        {
+            KeyValuePair<string, EventInfo> Event = EventDictionary.Where(it => it.Value.BitCost > 0 && it.Value.BitCost <= bits)?.OrderByDescending(it => it.Value.BitCost)?.FirstOrDefault() ?? default;
+            if (!Event.Equals(default(KeyValuePair<string, EventInfo>)))
+            {
+                switch (Event.Value)
+                {
+                    case TimedEventInfo timed:
+                        TimedEventInfo tei = new TimedEventInfo(perp, timed);
+                        //controller._log.LogMessage(Event.Key);
+                        ActionQueue.Add(new KeyValuePair<string, EventInfo>(Event.Key, tei));
+                        controller.timer.AddQueueEvent(Event.Key);
+                        break;
+                    case DataEvent dataEvent:
+                        DataEvent de = new DataEvent(perp, dataEvent, userInput);
+                        ActionQueue.Add(new KeyValuePair<string, EventInfo>(Event.Key, de));
+                        controller.timer.AddQueueEvent(Event.Key);
+                        break;
+                    default:
+                        EventInfo ei = new EventInfo(perp, Event.Value);
+                        //controller._log.LogMessage(Event.Key);
+                        ActionQueue.Add(new KeyValuePair<string, EventInfo>(Event.Key, ei));
+                        controller.timer.AddQueueEvent(Event.Key);
+                        break;
+                }
+            }
+        }
+
     }
 }

@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace TwitchController
 {
-    interface IMessageClient
+    internal interface IMessageClient
     {
         /// <summary>
         /// Makes connection to the server and start receiving messages.

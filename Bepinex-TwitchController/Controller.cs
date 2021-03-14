@@ -1,13 +1,12 @@
-﻿using System.Reflection;
-using TwitchController.Player_Events;
-using BepInEx.Logging;
+﻿using BepInEx.Logging;
+using System.Reflection;
 using System.Threading.Tasks;
-using UnityEngine.PlayerLoop;
+using TwitchController.Player_Events;
 
 namespace TwitchController
 {
 
-    public class TwitchController
+    public class Controller
     {
 
         public const string Version = "0.0.0.1";
@@ -15,9 +14,11 @@ namespace TwitchController
         internal readonly Secrets _secrets;
         internal readonly ManualLogSource _log;
         internal readonly Assembly myAssembly = Assembly.GetExecutingAssembly();
-        internal readonly EventLookup eventLookup;
         internal readonly TwitchEventManager eventManager;
         internal readonly TimerCooldown timer;
+        public readonly EventLookup eventLookup;
+        public static bool HypeTrain = false;
+        public static int HypeLevel = 1;
 
         public TwitchChatClient client;
         public TwitchPubSubClient pubsub;
@@ -26,17 +27,17 @@ namespace TwitchController
         public System.Threading.CancellationToken cts;
         public System.Threading.CancellationToken cts2;
 
+        public static Controller _instance;
 
-        public TwitchController(Secrets secrets, ManualLogSource log)
+
+        public Controller(Secrets secrets, ManualLogSource log)
         {
+            _instance = this;
             _secrets = secrets;
             _log = log;
             eventLookup = new EventLookup(this);
             eventManager = new TwitchEventManager(this);
             timer = new TimerCooldown(this);
-
-            // Customize event configuration
-            eventLookup.ConfigureEventCosts(secrets.eventConfigList);
         }
 
         public void Update()
@@ -46,17 +47,19 @@ namespace TwitchController
 
         public async Task<bool> StartTwitchChatClient()
         {
-            if(client is null)
+            if (client is null)
             {
                 cts = new System.Threading.CancellationToken();
                 client = new TwitchChatClient(this);
             }
 
-            if(!client.IsClientConnected())
+            if (!client.IsClientConnected())
             {
-                await client.ConnectAsync("oauth:" + _secrets.access_token, _secrets.botname, cts);
+                await client.ConnectAsync("oauth:" + _secrets.api_token, _secrets.username, cts);
                 TextChannel = await client.JoinChannelAsync(_secrets.username, cts);
                 TextChannel.MessageReceived += eventManager.ChatMessageReceived;
+                await TextChannel.SendMessageAsync($"ModBot Connected!", cts);
+                _log.LogWarning("ModBot Connected");
                 return true;
             }
             return false;
@@ -64,7 +67,7 @@ namespace TwitchController
 
         public async Task<bool> StartTwitchPubSubClient()
         {
-            if(pubsub is null)
+            if (pubsub is null)
             {
                 cts2 = new System.Threading.CancellationToken();
                 pubsub = new TwitchPubSubClient(this);
@@ -73,7 +76,7 @@ namespace TwitchController
             if (!pubsub.IsClientConnected())
             {
                 await pubsub.ConnectAsync(_secrets.api_token, _secrets.nick_id, cts2);
-                PubSubChannel = pubsub.JoinChannelAsync(_secrets.username, cts);
+                PubSubChannel = pubsub.JoinChannel(_secrets.username);
                 PubSubChannel.MessageReceived += eventManager.PubSubMessageReceived;
                 return true;
             }

@@ -7,7 +7,15 @@ namespace TwitchController
 {
     internal class TimerCooldown
     {
-        internal TimerCooldown(TwitchController twitchController)
+
+        private readonly Controller controller;
+
+        private readonly List<CustomEvent> customTimerEvents;
+
+        private readonly List<KeyValuePair<string, CustomEvent>> actionQueueEvents;
+        private readonly List<KeyValuePair<string, CustomEvent>> cooldownEvents;
+
+        internal TimerCooldown(Controller twitchController)
         {
             controller = twitchController;
             customTimerEvents = new List<CustomEvent>();
@@ -20,23 +28,16 @@ namespace TwitchController
             controller.eventLookup.TimedActionsQueue = new List<Action>();
         }
 
-        private readonly TwitchController controller;
-
-        private List<CustomEvent> customTimerEvents;
-
-        private List<KeyValuePair<string, CustomEvent>> actionQueueEvents;
-        private List<KeyValuePair<string, CustomEvent>> cooldownEvents;
-
         internal void AddCooldown(string text, float duration, EventInfo eventInfo)
         {
-            CustomEvent cooldownText = new CustomEvent(text, duration);
+            CustomEvent cooldownText = new CustomEvent(duration);
             cooldownText.SetEvent(new KeyValuePair<string, EventInfo>(text, eventInfo));
             customTimerEvents.Add(cooldownText);
         }
 
         internal void AddCooldown(string text, TimedEventInfo timedEvent)
         {
-            CustomEvent cooldownText = new CustomEvent(text, timedEvent.TimerLength);
+            CustomEvent cooldownText = new CustomEvent(timedEvent.TimerLength);
             cooldownText.SetTimedEvent(new KeyValuePair<string, TimedEventInfo>(text, timedEvent));
             controller.eventLookup.RunningEventIDs.Add(text);
             customTimerEvents.Add(cooldownText);
@@ -87,13 +88,16 @@ namespace TwitchController
                 try
                 {
                     // Execute all the timed event cleanup code BEFORE any of the other events
-                    controller.eventLookup.TimedActionsQueue[0].Invoke();
+                    Action action = controller.eventLookup.TimedActionsQueue[0];
                     controller.eventLookup.TimedActionsQueue.RemoveAt(0);
+
+                    action?.Invoke();
                 }
                 catch (Exception e)
                 {
                     controller._log.LogError("Failed to invoke action " + e.Message);
                     controller._log.LogError(e.StackTrace);
+                    controller.eventLookup.TimedActionsQueue.RemoveAt(0);
                 }
             }
 
@@ -125,15 +129,28 @@ namespace TwitchController
                     }
                     else
                     {
-
                         AddCooldown(localEventInfo.Key, 1, localEventInfo.Value);
                         controller.eventLookup.Cooldowns.Add(localEventInfo.Key, Time.time);
                         AddCooldownEvent(localEventInfo.Key, localEventInfo.Value.CooldownSeconds, localEventInfo.Value);
                     }
 
+                    if (localEventInfo.Value is DataEvent dataEvent)
+                    {
+
+                        try
+                        {
+                            dataEvent.DataAction?.Invoke(localEventInfo.Key, localEventInfo.Value.Perp, dataEvent.UserInput);
+                        }
+                        catch (Exception e)
+                        {
+                            controller._log.LogError("Failed to invoke action " + e.Message);
+                            controller._log.LogError(e.StackTrace);
+                        }
+                    }
+
                     try
                     {
-                        localEventInfo.Value.Action.Invoke();
+                        localEventInfo.Value.Action?.Invoke(localEventInfo.Key, localEventInfo.Value.Perp);
                     }
                     catch (Exception e)
                     {
@@ -143,20 +160,18 @@ namespace TwitchController
                 }
 
             }
-
-
         }
 
         internal void AddCooldownEvent(string text, float duration, EventInfo eventInfo)
         {
-            CustomEvent cooldownText = new CustomEvent(text, duration);
+            CustomEvent cooldownText = new CustomEvent(duration);
             cooldownText.SetEvent(new KeyValuePair<string, EventInfo>(text, eventInfo));
             cooldownEvents.Add(new KeyValuePair<string, CustomEvent>(text, cooldownText));
         }
 
         internal void AddQueueEvent(string text)
         {
-            CustomEvent cooldownText = new CustomEvent(text, float.MaxValue);
+            CustomEvent cooldownText = new CustomEvent(float.MaxValue);
             actionQueueEvents.Add(new KeyValuePair<string, CustomEvent>(text, cooldownText));
         }
 
@@ -190,15 +205,14 @@ namespace TwitchController
 
         private class CustomEvent
         {
-
-            private float duration;
-            private float startTime;
+            private readonly float duration;
+            private readonly float startTime;
 
             private KeyValuePair<string, TimedEventInfo> timedEvent;
             private KeyValuePair<string, EventInfo> normalEvent;
             private bool hasTimedEvent = false;
 
-            public CustomEvent(string text, float duration)
+            public CustomEvent(float duration)
             {
                 this.duration = duration;
                 startTime = Time.time;

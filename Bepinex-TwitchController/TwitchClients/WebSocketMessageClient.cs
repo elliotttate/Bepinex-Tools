@@ -8,35 +8,25 @@ using System.Threading.Tasks;
 
 namespace TwitchController
 {
-    class WebSocketMessageClient : IMessageClient
+    internal class WebSocketMessageClient : IMessageClient
     {
         public event EventHandler<string> MessageReceived;
 
         public event EventHandler ConnectionClosed;
 
-        private ClientWebSocket _webSocketClient = new ClientWebSocket();
+        private readonly ClientWebSocket _webSocketClient = new ClientWebSocket();
 
         private readonly Uri _webSocketServerUri;
 
-        public WebSocketMessageClient(string webSocketServerUrl = "irc.fdgt.dev") //"wss://irc-ws.chat.twitch.tv:443")
+        public WebSocketMessageClient(string webSocketServerUrl = /*"wss://irc.fdgt.dev:443") //*/"wss://irc-ws.chat.twitch.tv:443")
         {
             _webSocketServerUri = new Uri(webSocketServerUrl);
         }
 
         public async Task SendMessageAsync(string message, CancellationToken cancellationToken)
         {
-            var messageBytes = Encoding.UTF8.GetBytes(message);
+            byte[] messageBytes = Encoding.UTF8.GetBytes(message);
             await _webSocketClient.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, cancellationToken);
-        }
-
-        public static IEnumerable<T[]> AsBatches<T>(T[] input, int n)
-        {
-            for (int i = 0, r = input.Length; r >= n; r -= n, i += n)
-            {
-                var result = new T[n];
-                Array.Copy(input, i, result, 0, n);
-                yield return result;
-            }
         }
 
         public async Task ConnectAsync(string oauth, string nick, CancellationToken cancellationToken)
@@ -45,11 +35,12 @@ namespace TwitchController
 
             if (_webSocketClient.State == WebSocketState.Open)
             {
+
                 await SendMessageAsync($"PASS {oauth}", cancellationToken);
                 await SendMessageAsync($"NICK {nick}", cancellationToken);
 
                 // start receiving messages in separeted thread
-                var receive = ReceiveAsync(cancellationToken).ConfigureAwait(false);
+                System.Runtime.CompilerServices.ConfiguredTaskAwaitable receive = ReceiveAsync(cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -64,7 +55,7 @@ namespace TwitchController
             {
                 try
                 {
-                    var message = await ReceiveMessageAsync(cancellationToken);
+                    string message = await ReceiveMessageAsync(cancellationToken);
                     MessageReceived?.Invoke(this, message);
                 }
                 catch (WebSocketException)
@@ -72,8 +63,9 @@ namespace TwitchController
                     if (_webSocketClient.State != WebSocketState.Open)
                     {
                         ConnectionClosed?.Invoke(this, null);
-                        return;
                     }
+                    _webSocketClient.Abort();
+                    return;
                 }
             }
         }
@@ -92,16 +84,16 @@ namespace TwitchController
         private async Task<string> ReceiveMessageAsync(CancellationToken cancellationToken)
         {
             // RFC 1459 uses 512 bytes to hold one full message, therefore, it should be enough
-            var byteArray = new byte[512];
-            var receiveBuffer = new ArraySegment<byte>(byteArray);
+            byte[] byteArray = new byte[512];
+            ArraySegment<byte> receiveBuffer = new ArraySegment<byte>(byteArray);
 
-            var receivedResult = await _webSocketClient.ReceiveAsync(receiveBuffer, cancellationToken);
+            WebSocketReceiveResult receivedResult = await _webSocketClient.ReceiveAsync(receiveBuffer, cancellationToken);
 
-            var msgBytes = receiveBuffer.Skip(receiveBuffer.Offset)
+            byte[] msgBytes = receiveBuffer.Skip(receiveBuffer.Offset)
                 .Take(receivedResult.Count)
                 .ToArray();
 
-            var receivedMessage = Encoding.UTF8.GetString(msgBytes);
+            string receivedMessage = Encoding.UTF8.GetString(msgBytes);
 
             return receivedMessage;
         }
