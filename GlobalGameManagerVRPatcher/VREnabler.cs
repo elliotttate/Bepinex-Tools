@@ -7,18 +7,18 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 
-namespace QModManager
+namespace VRPatcher
 {
     /// <summary>
-    /// A patcher which runs ahead of UnityPlayer to enable VR in the Global Game Manager.
+    /// A patcher which runs ahead of UnityPlayer to enable VR in the Global Game Manager and copy the required plugins.
     /// </summary>
     public static class VREnabler
     {
-        internal static string UnityAudioFixerPath => Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-        internal static string GameRootPath => BepInEx.Paths.GameRootPath;
+        internal static string VRPatcherPath => Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         internal static string ManagedPath => BepInEx.Paths.ManagedPath;
+        internal static string PluginsPath => Path.Combine(ManagedPath, "../Plugins");
 
-        private static readonly ManualLogSource Logger = BepInEx.Logging.Logger.CreateLogSource("UnityAudioFixer");
+        private static readonly ManualLogSource Logger = BepInEx.Logging.Logger.CreateLogSource("VREnabler");
 
         /// <summary>
         /// Called from BepInEx while patching, our entry point for patching.
@@ -27,14 +27,76 @@ namespace QModManager
         [Obsolete("Should not be used!", true)]
         public static void Initialize()
         {
-            EnableVROptions(Path.Combine(ManagedPath, "../globalgamemanagers"));
+            if(PatchVROptions())
+            {
+                Logger.LogInfo("Checking for VR plugins...");
+
+                string path2 = Path.Combine(PluginsPath, "x86_64");
+
+                DirectoryInfo gamePluginsDirectory;
+
+                if (!Directory.Exists(path2))
+                {
+                    gamePluginsDirectory = new DirectoryInfo(PluginsPath);
+                }
+                else
+                {
+                    gamePluginsDirectory = new DirectoryInfo(path2);
+                }
+
+                string[] pluginNames = new string[]
+                {
+                        "AudioPluginOculusSpatializer.dll",
+                        "openvr_api.dll",
+                        "OVRGamepad.dll",
+                        "OVRPlugin.dll"
+                };
+
+                FileInfo[] gamePluginFiles = gamePluginsDirectory.GetFiles();
+
+                bool hasCopied = false;
+
+                Assembly assembly = Assembly.GetExecutingAssembly();
+                string assemblyName = assembly.GetName().Name;
+
+
+                foreach (string pluginName in pluginNames)
+                {
+                    if (!Array.Exists<FileInfo>(gamePluginFiles, (file) => pluginName == file.Name))
+                    {
+                        hasCopied = true;
+                        using (var resource = assembly.GetManifestResourceStream($"{assemblyName}.Plugins." + pluginName))
+                        {
+                            using (var file = new FileStream(Path.Combine(gamePluginsDirectory.FullName, pluginName), FileMode.Create, FileAccess.Write, FileShare.Delete))
+                            {
+                                Logger.LogInfo("Copying " + pluginName);
+                                resource.CopyTo(file);
+                            }
+                        }
+                    }
+                }
+
+                if (hasCopied)
+                    Logger.LogInfo("Successfully copied VR plugins!");
+                else
+                    Logger.LogInfo("VR plugins already present");
+                return;
+            }
+
+
         }
 
-        private static void EnableVROptions(string path)
+        private static void CurrentDomain_ProcessExit(object sender, EventArgs e)
         {
+            PatchVROptions(true);
+        }
+
+        private static bool PatchVROptions(bool UnPatch = false)
+        {
+            string path = Path.Combine(ManagedPath, "../globalgamemanagers");
             AssetsManager am = new AssetsManager();
             AssetsFileInstance afi = am.LoadAssetsFile(path, false);
-            am.LoadClassDatabase(Path.Combine(UnityAudioFixerPath, "cldb.dat"));
+            am.LoadClassDatabase(Path.Combine(VRPatcherPath, "cldb.dat"));
 
 
             for(int i = 0; i < afi.table.assetFileInfoCount; i++)
@@ -56,14 +118,23 @@ namespace QModManager
                         continue;
 
 
-                    AssetTypeValueField Oculus = ValueBuilder.DefaultValueFieldFromArrayTemplate(vrArrayField);
-                    Oculus.GetValue().Set("Oculus");
                     AssetTypeValueField OpenVR = ValueBuilder.DefaultValueFieldFromArrayTemplate(vrArrayField);
                     OpenVR.GetValue().Set("OpenVR");
+                    AssetTypeValueField Oculus = ValueBuilder.DefaultValueFieldFromArrayTemplate(vrArrayField);
+                    Oculus.GetValue().Set("Oculus");
                     AssetTypeValueField None = ValueBuilder.DefaultValueFieldFromArrayTemplate(vrArrayField);
                     None.GetValue().Set("None");
 
-                    vrArrayField.SetChildrenList(new AssetTypeValueField[] { Oculus, OpenVR, None });
+                    if(!UnPatch)
+                    {
+                        vrArrayField.SetChildrenList(new AssetTypeValueField[] { None, OpenVR, Oculus });
+                        Logger.LogMessage("Patching GGM");
+                    }
+                    else
+                    {
+                        vrArrayField.SetChildrenList(new AssetTypeValueField[] { None });
+                        Logger.LogMessage("UnPatching GGM");
+                    }
 
                     byte[] vrAsset;
                     using (MemoryStream memStream = new MemoryStream())
@@ -83,12 +154,13 @@ namespace QModManager
                         afi.stream.Close();
                         File.WriteAllBytes(path, memStream.ToArray());
                     }
-                    return;
+                    return true;
                 }
                 catch { }
             }
 
             Logger.LogError("VR enable location not found!");
+            return false;
 
         }
 

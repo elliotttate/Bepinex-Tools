@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bepinex-Publicizer", "Bepin
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TwitchController", "Bepinex-TwitchController\TwitchController.csproj", "{625D8F6B-1C3C-45CE-925E-D060B001CE4C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GlobalGameManagerVRPatcher", "GlobalGameManagerVRPatcher\GlobalGameManagerVRPatcher.csproj", "{FB618AB1-9EFB-4845-8C20-85C54A335E78}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VRPatcher", "GlobalGameManagerVRPatcher\VRPatcher.csproj", "{FB618AB1-9EFB-4845-8C20-85C54A335E78}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

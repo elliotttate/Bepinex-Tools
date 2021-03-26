@@ -7,8 +7,8 @@
     <ProjectGuid>{FB618AB1-9EFB-4845-8C20-85C54A335E78}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>GlobalGameManagerVRPatcher</RootNamespace>
-    <AssemblyName>GlobalGameManagerVRPatcher</AssemblyName>
+    <RootNamespace>VRPatcher</RootNamespace>
+    <AssemblyName>VRPatcher</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
@@ -27,7 +27,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>none</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>bin\Release\VRPatcher\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -74,6 +74,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Plugins\AudioPluginOculusSpatializer.dll" />
+    <EmbeddedResource Include="Plugins\openvr_api.dll" />
+    <EmbeddedResource Include="Plugins\OVRGamepad.dll" />
+    <EmbeddedResource Include="Plugins\OVRPlugin.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
