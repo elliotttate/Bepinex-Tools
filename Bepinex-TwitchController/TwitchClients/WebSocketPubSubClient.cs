@@ -42,36 +42,39 @@ namespace TwitchController
 
         public async Task ConnectAsync(string token, string channelId, CancellationToken cancellationToken)
         {
-            await _webSocketClient.ConnectAsync(_webSocketServerUri, cancellationToken);
-
-            if (_webSocketClient.State == WebSocketState.Open)
+            try
             {
-                ListenRequest lr = new ListenRequest();
-                ListenRequestData lrd = new ListenRequestData
-                {
-                    auth_token = token,
-                    topics = new string[] { "channel-points-channel-v1." + channelId, "channel-bits-events-v2." + channelId, "channel-subscribe-events-v1." + channelId, "hype-train-events-v1." + channelId }
-                };
-                lr.data = lrd;
-                lr.nonce = "lkjsdhfiusdagf";
-                lr.type = "LISTEN";
-                StringBuilder stringBuilder = new StringBuilder();
-                JsonMapper.ToJson(lr, new JsonWriter(stringBuilder));
-                string jlr = stringBuilder.ToString();
-                //Controller._instance._log.LogMessage(jlr);
-                await SendMessageAsync(jlr, cancellationToken);
+                await _webSocketClient.ConnectAsync(_webSocketServerUri, cancellationToken);
 
-                Timer timer = new Timer(async (e) =>
+                if(_webSocketClient.State == WebSocketState.Open)
                 {
-                    Controller._instance._log.LogMessage("Sending PubSub Ping");
-                    await SendMessageAsync("{\"type\":  \"PING\"}", cancellationToken);
-                }, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
+                    ListenRequest lr = new ListenRequest();
+                    ListenRequestData lrd = new ListenRequestData
+                    {
+                        auth_token = token,
+                        topics = new string[] { "channel-points-channel-v1." + channelId, "channel-bits-events-v2." + channelId, "channel-subscribe-events-v1." + channelId, "hype-train-events-v1." + channelId }
+                    };
+                    lr.data = lrd;
+                    lr.nonce = "lkjsdhfiusdagf";
+                    lr.type = "LISTEN";
+                    StringBuilder stringBuilder = new StringBuilder();
+                    JsonMapper.ToJson(lr, new JsonWriter(stringBuilder));
+                    string jlr = stringBuilder.ToString();
+                    //Controller._instance._log.LogMessage(jlr);
+                    await SendMessageAsync(jlr, cancellationToken);
 
-                // start receiving messages in separeted thread
-                System.Runtime.CompilerServices.ConfiguredTaskAwaitable receive = ReceiveAsync(cancellationToken).ConfigureAwait(false);
+                    Timer timer = new Timer(async (e) =>
+                    {
+                        Controller._instance._log.LogMessage("Sending PubSub Ping");
+                        await SendMessageAsync("{\"type\":  \"PING\"}", cancellationToken);
+                    }, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
+
+                    // start receiving messages in separeted thread
+                    System.Runtime.CompilerServices.ConfiguredTaskAwaitable receive = ReceiveAsync(cancellationToken).ConfigureAwait(false);
+                }
+
             }
-
-
+            catch { }
         }
 
         public bool IsConnected()

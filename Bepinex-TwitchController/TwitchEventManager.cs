@@ -33,21 +33,18 @@ namespace TwitchController
                     string user = x[0];
                     string trigger = x[1];
                     controller._log.LogWarning($"User:{user},  Trigger:{trigger}");
-                    controller.eventLookup.Lookup(trigger, user, "");
-                }
-
-                if (x.Length == 3)
-                {
-                    string user = x[0];
-                    string trigger = x[1];
-                    string customData = x[2];
-                    controller._log.LogWarning($"User:{user},  Trigger:{trigger}, Data:{customData}");
-                    controller.eventLookup.Lookup(trigger, user, customData);
+                    controller.eventLookup.Lookup(trigger, user);
                 }
             }
 
             if(e.User.ToLower().TrimEnd().TrimStart() == controller._secrets.botname.ToLower().TrimEnd().TrimStart())
             {
+                if(e.TriggerText.Contains("WE DID IT! WE HIT A LEVEL 5 HYPE TRAIN!"))
+                {
+                    controller.eventLookup.Lookup("HypeTrainLevel5Complete", "HypeTrain 5 Complete!!!");
+                    return;
+                }
+
                 Regex regex = new Regex(controller._secrets.regex);
                 Match match = regex.Match(e.TriggerText);
 
@@ -69,7 +66,7 @@ namespace TwitchController
                 int bits = (int)(donated * 100);
 
                 controller._log.LogWarning($"User:{user},  Bits:{bits}");
-                controller.eventLookup.Lookup(user, bits, "");
+                controller.eventLookup.Lookup(user, bits);
             }
         }
 
@@ -78,14 +75,14 @@ namespace TwitchController
             if (e.Host == ChannelPointsHost() || e.Host == SubscriptionHost())
             {
                 controller._log.LogWarning($"Host:{e.Host},  User:{e.User},  Trigger:{e.TriggerText}");
-                controller.eventLookup.Lookup(e.TriggerText, e.User, e.UserInput);
+                controller.eventLookup.Lookup(e.TriggerText, e.User);
                 return;
             }
 
             if (e.Host == BitsHost())
             {
-                controller._log.LogWarning($"{e.Host}: {e.User}, {e.TriggerText}, {e.UserInput}");
-                controller.eventLookup.Lookup(e.User, int.Parse(e.TriggerText), e.UserInput);
+                controller._log.LogWarning($"{e.Host}: {e.User}, {e.TriggerText}");
+                controller.eventLookup.Lookup(e.User, int.Parse(e.TriggerText));
                 return;
             }
         }

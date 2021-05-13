@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using TwitchController.Player_Events.Models;
+using UnityEngine;
 
 namespace TwitchController.Player_Events
 {
@@ -93,7 +94,7 @@ namespace TwitchController.Player_Events
             return message;
         }
 
-        public void Lookup(string EventText, string perp, string userInput)
+        public void Lookup(string EventText, string perp)
         {
             if (EventDictionary.TryGetValue(EventText.Trim(), out EventInfo eventInfo))
             {
@@ -112,27 +113,26 @@ namespace TwitchController.Player_Events
             }
         }
 
-        public void Lookup(string perp, int bits, string userInput)
+        public void Lookup(string perp, int bits)
         {
-            KeyValuePair<string, EventInfo> Event = EventDictionary.Where(it => it.Value.BitCost > 0 && it.Value.BitCost <= bits)?.OrderByDescending(it => it.Value.BitCost)?.FirstOrDefault() ?? default;
+            var Events = EventDictionary.Where(it => it.Value.BitCost > 0 && it.Value.BitCost == bits)?.ToList() ?? new List<KeyValuePair<string, EventInfo>>();
+            KeyValuePair<string, EventInfo> Event = default(KeyValuePair<string, EventInfo>);
+            if(Events.Count > 0)
+                Event = Events[UnityEngine.Random.Range(0, Events.Count - 1)];
+            else
+                Event = EventDictionary.Where(it => it.Value.BitCost > 0 && it.Value.BitCost <= bits)?.OrderByDescending(it => it.Value.BitCost)?.FirstOrDefault() ?? default;
+
             if (!Event.Equals(default(KeyValuePair<string, EventInfo>)))
             {
-                switch (Event.Value)
+                switch(Event.Value)
                 {
                     case TimedEventInfo timed:
                         TimedEventInfo tei = new TimedEventInfo(perp, timed);
-                        //controller._log.LogMessage(Event.Key);
                         ActionQueue.Add(new KeyValuePair<string, EventInfo>(Event.Key, tei));
-                        controller.timer.AddQueueEvent(Event.Key);
-                        break;
-                    case DataEvent dataEvent:
-                        DataEvent de = new DataEvent(perp, dataEvent, userInput);
-                        ActionQueue.Add(new KeyValuePair<string, EventInfo>(Event.Key, de));
                         controller.timer.AddQueueEvent(Event.Key);
                         break;
                     default:
                         EventInfo ei = new EventInfo(perp, Event.Value);
-                        //controller._log.LogMessage(Event.Key);
                         ActionQueue.Add(new KeyValuePair<string, EventInfo>(Event.Key, ei));
                         controller.timer.AddQueueEvent(Event.Key);
                         break;

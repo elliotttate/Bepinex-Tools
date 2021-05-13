@@ -8,9 +8,9 @@
 
         public string Host { get; set; }
 
-        public string TriggerText { get; set; }
+        public string Channel { get; set; }
 
-        public string UserInput { get; set; }
+        public string TriggerText { get; set; }
 
     }
 }

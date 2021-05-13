@@ -51,14 +51,21 @@ namespace TwitchController
         {
             try
             {
+                if(this.TryParsePrivateMessage(e, out Message message))
+                {
+                    _channel?.ReceiveMessage(message);
+                }
+            }
+            catch(Exception ex) 
+            {
+                Controller._instance._log.LogError($"{ex}");
+            }
+
+            try
+            {
                 MessageRecieved?.Invoke(sender, e);
             }
             catch { }
-
-            if (TryParsePrivateMessage(e, out Message message))
-            {
-                _channel?.ReceiveMessage(message);
-            }
         }
 
         /// <summary>
@@ -109,75 +116,77 @@ namespace TwitchController
         public bool TryParsePrivateMessage(string message, out Message msg)
         {
             msg = new Message();
-
             JsonData data = JsonMapper.ToObject(new JsonReader(message));
-            string msgType = data["type"].ToString().ToLower();
 
-            switch (msgType)
+            string msgType = data[0].ToString().ToLower();
+            List<string> keys = data.Keys.ToList();
+
+            switch(msgType)
             {
                 case "pong":
-                    controller._log.LogMessage("PubSub Pong Recieved!");
+                    Controller._instance._log.LogError("PubSub Pong Recieved!");
                     return false;
-                case "RESPONSE":
-                    if (data.ContainsKey("error") && !string.IsNullOrWhiteSpace(data["error"].ToString()))
+                case "response":
+                    if(keys.Contains("error") && !string.IsNullOrWhiteSpace(data[keys.IndexOf("error")].ToString()))
                     {
-                        controller._log.LogFatal($"Failed to properly connect to PubSub! Restarting game REQUIRED!");
+                        Controller._instance._log.LogFatal($"Failed to properly connect to PubSub! Restarting game REQUIRED!");
                     }
                     else
                     {
-                        controller._log.LogWarning($"Connected to PubSub!");
+                        Controller._instance._log.LogError($"Connected to PubSub!");
                     }
                     return false;
                 case "reconnect":
-                    controller._log.LogFatal($"Twitch Server Restarting connection will be lost within 30 seconds.");
+                    Controller._instance._log.LogFatal($"Twitch Server Restarting connection will be lost within 30 seconds.");
                     _twitchMessageClient.DisconnectAsync(Controller._instance.cts2).Wait();
                     break;
                 case "message":
                     MessageResponse messageResponse = JsonMapper.ToObject<MessageResponse>(message);
-                    string MR = messageResponse.data.message.Replace(@"\", "");
-                    string host = messageResponse.data.topic;
+                    var MR = messageResponse.data.message.Replace(@"\", "");
+                    var host = messageResponse.data.topic;
 
-                    switch (host.Split('.')[0])
+                    switch(host.Split('.')[0])
                     {
                         case "channel-subscribe-events-v1":
                             try
                             {
                                 SubEvent subEvent = JsonMapper.ToObject<SubEvent>(MR);
 
+                                msg.Channel = subEvent.channel_name.ToLower();
                                 msg.Host = host;
                                 msg.RawMessage = message;
                                 msg.TriggerText = subEvent.sub_plan;
-                                msg.User = subEvent.is_gift ? subEvent.recipient_display_name : subEvent.display_name;
+                                msg.User = subEvent.is_gift && !string.IsNullOrEmpty(subEvent.user_name)  ? subEvent.recipient_display_name : subEvent.display_name;
 
                                 return true;
 
                             }
-                            catch (Exception e)
+                            catch(Exception e)
                             {
-                                controller._log.LogError($"Failed to convert {MR} into SubEvent.");
-                                controller._log.LogError(e);
+                                Controller._instance._log.LogFatal($"Failed to convert {MR} into SubEvent.");
+                                Controller._instance._log.LogFatal(e);
                                 return false;
                             }
                         case "channel-bits-events-v2":
                             try
                             {
                                 BitsEvent bitsEvent = JsonMapper.ToObject<BitsEvent>(MR);
+                                msg.Channel = bitsEvent.data.channel_name.ToLower();
                                 msg.Host = host;
                                 msg.RawMessage = message;
                                 msg.TriggerText = bitsEvent.data.bits_used.ToString();
                                 msg.User = bitsEvent.is_anonymous ? "Anonymous" : bitsEvent.data.user_name;
-                                msg.UserInput = bitsEvent.data.chat_message;
 
                                 return true;
                             }
                             catch(Exception e)
                             {
-                                controller._log.LogWarning($"Failed to convert {MR} into BitsEvent.");
-                                controller._log.LogError(e);
+                                Controller._instance._log.LogFatal($"Failed to convert {MR} into BitsEvent.");
+                                Controller._instance._log.LogFatal(e);
                                 return false;
                             }
                         case "channel-points-channel-v1":
-                            if (MR.Contains("reward-redeemed"))
+                            if(MR.Contains("reward-redeemed"))
                             {
                                 try
                                 {
@@ -185,55 +194,54 @@ namespace TwitchController
                                     ChannelPointsMessageResponse pointsMessage = JsonMapper.ToObject<ChannelPointsMessageResponse>(reader);
 
                                     msg.Host = $"channel-points-channel-v1.{controller._secrets.nick_id}";
+                                    msg.Channel = controller._secrets.username.ToLower();
                                     msg.RawMessage = message;
                                     msg.User = pointsMessage.data.redemption.user.display_name;
                                     msg.TriggerText = pointsMessage.data.redemption.reward.title;
-                                    msg.UserInput = pointsMessage.data.redemption.user_input;
-
 
                                     return true;
                                 }
-                                catch (Exception e)
+                                catch(Exception e)
                                 {
-                                    controller._log.LogError($"Failed to convert {MR} into Points Event.");
-                                    controller._log.LogError(e);
+                                    Controller._instance._log.LogFatal($"Failed to convert {MR} into Points Event.");
+                                    Controller._instance._log.LogFatal(e);
                                     return false;
                                 }
                             }
                             return false;
                         case "hype-train-events-v1":
-                            if (MR.Contains("hype-train-start"))
+                            if(MR.Contains("hype-train-start"))
                             {
                                 Controller.HypeTrain = true;
-                                if (controller.eventLookup.TryGetEvent("HypeTrain", out EventInfo eventInfo))
+                                if(controller.eventLookup.TryGetEvent("HypeTrain", out EventInfo eventInfo))
                                 {
                                     eventInfo.BitCost = 100;
                                 }
-                                controller.eventLookup.Lookup("HypeTrainStart", $"LEVEL {Controller.HypeLevel} HYPETRAIN!!!", "");
+                                controller.eventLookup.Lookup("HypeTrainStart", "!!!HYPETRAIN STARTED!!!");
 
                                 return false;
                             }
-                            else if (MR.Contains("hype-train-level-up"))
+                            else if(MR.Contains("hype-train-level-up"))
                             {
                                 Controller.HypeLevel += 1;
-                                controller.eventLookup.Lookup($"HypeTrainLevel{Controller.HypeLevel}", $"!!!LEVEL {Controller.HypeLevel} HYPETRAIN!!!", "");
+                                controller.eventLookup.Lookup($"HypeTrainLevel{Controller.HypeLevel}", $"!!!LEVEL {Controller.HypeLevel} HYPETRAIN!!!");
                                 return false;
                             }
-                            else if (MR.Contains("hype-train-end"))
+                            else if(MR.Contains("hype-train-end"))
                             {
                                 Controller.HypeTrain = false;
                                 Controller.HypeLevel = 1;
-                                if (controller.eventLookup.TryGetEvent("HypeTrain", out EventInfo eventInfo))
+                                if(controller.eventLookup.TryGetEvent("HypeTrain", out EventInfo eventInfo))
                                 {
                                     eventInfo.BitCost = 0;
                                 }
-                                controller.eventLookup.Lookup("HypeTrainEnd", $"!!!HYPETRAIN FINISHED!!!", "");
+                                controller.eventLookup.Lookup("HypeTrainEnd", $"!!!HYPETRAIN FINISHED!!!");
 
                                 return false;
                             }
                             return false;
                         default:
-                            controller._log.LogError($"PubSub Event Failed to Parse \n {message}");
+                            Controller._instance._log.LogFatal($"PubSub Event Failed to Parse \n {message}");
                             return false;
                     }
 
