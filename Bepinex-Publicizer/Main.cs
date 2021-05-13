@@ -106,9 +106,8 @@
                 if(!Directory.Exists(outputPath))
                 {
                     log.LogError($"Output folder not found at {outputPath}");
-                    return;
+                    continue;
                 }
-                stringBuilder.AppendLine($"Publicizing files into {outputPath}");
                 int count = 0;
 
                 foreach(Assembly assembly in assemblies)
@@ -153,13 +152,13 @@
                 }
                 if(count > 0)
                 {
-                    stringBuilder.AppendLine($"    Files output: {count}");
-                    stringBuilder.AppendLine();
+                    stringBuilder.AppendLine($"Publicized {count} files into {outputPath}");
                 }
             }
 
             if(totalCount > 0)
             {
+                stringBuilder.AppendLine();
                 stringBuilder.AppendLine($"Total files output: {totalCount}");
                 log.LogMessage(stringBuilder.ToString());
             }
@@ -186,7 +185,7 @@
                 return;
             }
 
-            RewriteAssembly(assemblyPath).Write($"{Path.Combine(outputPath, filename)}.dll");
+            RewriteAssembly(assemblyPath).Write($"{Path.Combine(outputPath, filename)}_publicized.dll");
             File.WriteAllText(hashPath, curHash);
 
             count++;
