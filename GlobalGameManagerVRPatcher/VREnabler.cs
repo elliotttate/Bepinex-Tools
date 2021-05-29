@@ -1,14 +1,14 @@
-﻿using AssetsTools.NET;
-using AssetsTools.NET.Extra;
-using BepInEx.Logging;
-using Mono.Cecil;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
-
-namespace VRPatcher
+﻿namespace VRPatcher
 {
+    using AssetsTools.NET;
+    using AssetsTools.NET.Extra;
+    using BepInEx.Logging;
+    using Mono.Cecil;
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Reflection;
+
     /// <summary>
     /// A patcher which runs ahead of UnityPlayer to enable VR in the Global Game Manager and copy the required plugins.
     /// </summary>
@@ -19,6 +19,7 @@ namespace VRPatcher
         internal static string PluginsPath => Path.Combine(ManagedPath, "../Plugins");
 
         private static readonly ManualLogSource Logger = BepInEx.Logging.Logger.CreateLogSource("VREnabler");
+        private static string VRMode = "none";
 
         /// <summary>
         /// Called from BepInEx while patching, our entry point for patching.
@@ -27,7 +28,40 @@ namespace VRPatcher
         [Obsolete("Should not be used!", true)]
         public static void Initialize()
         {
-            if(PatchVROptions())
+            string configPath = Path.Combine(Environment.CurrentDirectory, "VRMODE.txt");
+            if(!File.Exists(configPath))
+            {
+                using(StreamWriter writer = new StreamWriter(configPath))
+                {
+                    try
+                    {
+                        writer.WriteLine(VRMode);
+                        writer.Close();
+                    }
+                    catch { writer.Close(); }
+                }
+            }
+            else
+            {
+                using(StreamReader reader = new StreamReader(configPath))
+                {
+                    try
+                    {
+                        VRMode = reader.ReadToEnd().Trim().ToLower();
+                        reader.Close();
+                    }
+                    catch(Exception e)
+                    {
+                        reader.Close();
+                        Logger.LogError($"Failed loading config. Unpatching GGM");
+                        Logger.LogError($"{e.Message}");
+                        PatchVROptions(true);
+                        return;
+                    }
+                }
+            }
+
+            if(PatchVROptions() && VRMode != "none")
             {
                 Logger.LogInfo("Checking for VR plugins...");
 
@@ -82,11 +116,9 @@ namespace VRPatcher
                     Logger.LogInfo("VR plugins already present");
                 return;
             }
-
-
         }
 
-        private static void CurrentDomain_ProcessExit(object sender, EventArgs e)
+        private static void VREnabler_Exited(object sender, EventArgs e)
         {
             PatchVROptions(true);
         }
@@ -117,22 +149,37 @@ namespace VRPatcher
                     if (vrArrayField is null)
                         continue;
 
+                    AssetTypeValueField field = ValueBuilder.DefaultValueFieldFromArrayTemplate(vrArrayField);
+                    field.GetValue().Set("None");
 
-                    AssetTypeValueField OpenVR = ValueBuilder.DefaultValueFieldFromArrayTemplate(vrArrayField);
-                    OpenVR.GetValue().Set("OpenVR");
-                    AssetTypeValueField Oculus = ValueBuilder.DefaultValueFieldFromArrayTemplate(vrArrayField);
-                    Oculus.GetValue().Set("Oculus");
-                    AssetTypeValueField None = ValueBuilder.DefaultValueFieldFromArrayTemplate(vrArrayField);
-                    None.GetValue().Set("None");
+                    switch(VRMode)
+                    {
+                        case "oculus":
+                            field.GetValue().Set("Oculus");
+                            break;
+                        case "steamvr":
+                        case "openvr":
+                            field.GetValue().Set("OpenVR");
+                            break;
+                        case "none":
+                            UnPatch = true;
+                            break;
+                        default:
+                            UnPatch = true;
+                            Logger.LogMessage($"Unknown VR config string: {VRMode} Unpatching VR");
+                            VRMode = "none";
+                            break;
+                    }
+
 
                     if(!UnPatch)
                     {
-                        vrArrayField.SetChildrenList(new AssetTypeValueField[] { None, OpenVR, Oculus });
+                        vrArrayField.SetChildrenList(new AssetTypeValueField[] { field });
                         Logger.LogMessage("Patching GGM");
                     }
                     else
                     {
-                        vrArrayField.SetChildrenList(new AssetTypeValueField[] { None });
+                        vrArrayField.SetChildrenList(new AssetTypeValueField[] { field });
                         Logger.LogMessage("UnPatching GGM");
                     }
 
@@ -156,7 +203,9 @@ namespace VRPatcher
                     }
                     return true;
                 }
-                catch { }
+                catch
+                {
+                }
             }
 
             Logger.LogError("VR enable location not found!");
