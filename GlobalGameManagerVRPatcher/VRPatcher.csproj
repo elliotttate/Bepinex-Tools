@@ -33,8 +33,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="AssetsTools.NET">
-      <HintPath>..\packages\AssetsTools.NET.2.0.6\lib\net35\AssetsTools.NET.dll</HintPath>
+    <Reference Include="AssetsTools.NET, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\AssetsTools.NET.2.0.9\lib\net40\AssetsTools.NET.dll</HintPath>
     </Reference>
     <Reference Include="BepInEx">
       <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\SubnauticaZero.Stable\BepInEx\core\BepInEx.dll</HintPath>

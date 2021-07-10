@@ -136,7 +136,7 @@
                 try
                 {
                     AssetFileInfoEx info = afi.table.GetAssetInfo(i);
-                    AssetTypeInstance ati = am.GetATI(afi.file, info);
+                    AssetTypeInstance ati = am.GetTypeInstance(afi.file, info);
                     AssetTypeValueField baseField = ati?.GetBaseField();
 
                     AssetTypeValueField enabledVRDevicesField = baseField?.Get("enabledVRDevices");
